@@ -1,0 +1,157 @@
+---
+title: "LogisticRegModel_CrossVal"
+author: "Carlos Moncada"
+date: "2024-04-07"
+output: html_document
+---
+
+```{r}
+if(!require(caret)) install.packages("caret")
+if(!require(glmnet)) install.packages("glmnet")
+if(!require(randomForest)) install.packages("randomForest")
+```
+
+```{r}
+library(caret)
+library(glmnet)
+library(dplyr)
+library(pROC) # For AUC
+
+set.seed(1234) # for reproducibility
+```
+
+```{r}
+employed_full_cross_valid <- employed_full_cross_valid %>% select(-employment_status)
+employed_full_cross_valid$income_above_limit <- as.factor(employed_full_cross_valid$income_above_limit)
+str(employed_full_cross_valid)
+
+employed_full_test <- employed_full_test %>% select(-employment_status)
+employed_full_test$income_above_limit <- as.factor(employed_full_test$income_above_limit)
+
+```
+
+```{r}
+# Preparing the training control
+trainControl <- trainControl(method = "cv", number = 10) # 10-fold cross-validation
+
+# Logistic Regression
+logisticModel <- train(income_above_limit ~ ., data = employed_full_cross_valid, method = "glm", family = "binomial", trControl = trainControl)
+summary(logisticModel)
+```
+
+```{r}
+# Predict on the validation set
+predictions <- predict(logisticModel, newdata = employed_full_test, type = "prob")
+predicted_classes <- ifelse(predictions[, "1"] > 0.5, 1, 0)
+
+# Actual outcomes
+actual_classes <- employed_full_test$income_above_limit
+
+# Generate the confusion matrix
+confusionMatrix <- table(Predicted = predicted_classes, Actual = actual_classes)
+
+# Print the confusion matrix
+print(confusionMatrix)
+```
+
+```{r}
+# Convert actual and predicted to factors ensuring levels are the same for accurate comparison
+actual_classes <- factor(actual_classes, levels = c("0", "1"))
+predicted_classes <- factor(predicted_classes, levels = c("0", "1"))
+
+cm_table <- conf_matrix$table
+
+# Correctly access elements
+TN <- cm_table[1, 1]
+TP <- cm_table[2, 2]
+FP <- cm_table[2, 1]
+FN <- cm_table[1, 2]
+
+# Now, calculate accuracy
+accuracy <- (TN + TP) / (TN + TP + FN + FP)
+
+# Calculate precision
+precision <- TP / (TP + FP)
+
+# Calculate AUC
+roc_result <- roc(actual_classes, predictions[, "1"], levels = c("0", "1"))
+auc_value <- auc(roc_result)
+
+cat("Accuracy:", accuracy, "\n", "Precision:", precision, "\n", "AUC:", auc_value, "\n")
+
+```
+
+```{r}
+# Hyperparameter tuning
+# Prepare data
+x <- model.matrix(income_above_limit ~ . -1, data = employed_full_noID) # -1 to omit intercept
+y <- employed_full_noID$income_above_limit
+y <- factor(y)
+levels(y) <- make.names(levels(y))
+
+# Define the train control
+train_control <- trainControl(method = "cv", number = 10, search = "random", classProbs = TRUE, summaryFunction = twoClassSummary) 
+
+# Define the tuning grid
+# alpha: mixing parameter between ridge (0) and lasso (1)
+# lambda: regularization strength
+tune_grid <- expand.grid(alpha = seq(0, 1, by = 0.1),
+                         lambda = 10^seq(-3, 3, length = 10))
+
+# Train the model
+logisticModel2 <- train(x, y, method = "glmnet",
+                      tuneGrid = tune_grid,
+                      trControl = train_control,
+                      metric = "ROC", # to maximize AUC
+                      preProc = c("center", "scale"), # Standard preprocessing
+                      family = "binomial")
+
+# View the best tuning parameters and model performance
+print(logisticModel2)
+
+```
+
+```{r}
+# Ensure the outcome variable is a factor
+employed_full_cross_valid$income_above_limit <- factor(employed_full_cross_valid$income_above_limit)
+
+# Rename factor levels to valid R variable names
+levels(employed_full_cross_valid$income_above_limit) <- make.names(levels(employed_full_cross_valid$income_above_limit), unique = TRUE)
+
+
+# Define training control
+train_control <- trainControl(method = "cv", number = 10, savePredictions = "final", classProbs = TRUE, summaryFunction = twoClassSummary)
+
+# Logistic Regression
+model_logistic <- train(income_above_limit ~ ., data = employed_full_cross_valid, method = "glm", family = "binomial", trControl = train_control, metric = "ROC")
+
+# Random Forest
+model_rf <- train(income_above_limit ~ ., data = employed_full_cross_valid, method = "rf", trControl = train_control, metric = "ROC", tuneLength = 5)
+
+# K-Nearest Neighbors
+model_knn <- train(income_above_limit ~ ., data = employed_full_cross_valid, method = "knn", trControl = train_control, metric = "ROC", tuneLength = 5)
+
+# Print the results
+results <- resamples(list(Logistic=model_logistic, RandomForest=model_rf, KNN=model_knn))
+summary(results)
+```
+
+```{r}
+# Compare models based on ROC
+bwplot(results, metric = "ROC")
+
+```
+
+```{r}
+# Compare models based on Sens
+bwplot(results, metric = "Sens")
+```
+```{r}
+# Compare models based on Spec
+bwplot(results, metric = "Spec")
+```
+
+
+```{r}
+
+```

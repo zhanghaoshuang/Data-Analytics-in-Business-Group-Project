@@ -1,0 +1,306 @@
+---
+title: "Brandon EDA"
+author: "Brandon Ritchie"
+date: '2024-03-01'
+output: html_document
+---
+
+```{r}
+library(tidyverse)
+
+# Read in Data
+train_raw <- read_csv('../../Data/Train.csv') %>% 
+  filter(age >= 18,# remove minors
+         !is.na(income_above_limit)) %>% 
+  mutate(income_above_limit = case_when(
+    income_above_limit == 'Below limit' ~ 0,
+    income_above_limit == 'Above limit' ~ 1
+  )) 
+
+
+```
+First I will set a threshold of removing columns with more than 20% of records NA.
+
+The only other columns that have values that represent NA's are the country of birth columns and the migration code columns. I think can remove country of birth columns in favor of the citizenship column.
+
+```{r}
+# Identify additional NA's
+unique_values <- lapply(train_raw, unique)
+#print(unique_values)
+
+train_raw[train_raw == "?"] <- NA
+
+# Clean up NA columns
+na_cols <- train_raw %>% 
+  summarise_all(~ sum(is.na(.)) / n())%>%
+  pivot_longer(cols = everything(), names_to = 'Name', values_to = 'Value') %>% 
+  filter(Value >= 0.20) %>% 
+  pull(Name)
+
+train1 <- train_raw %>% 
+  select(-na_cols)
+
+
+
+
+```
+
+
+I performed the following cleaning on each column:
+
+education: Education levels below high school are grouped because they are similar in output. The data has an ordinal order, but I decided to keep it categorical due to the likelihood of uneven spacing and interpretability. I also one-hot encoded the column for use in data modeling.
+race: I added hispanic races and one-hot encoded
+marital_status: Grouped present married couples (similar percentage) and left the rest. One-hot encoded the values.
+working_week_per_year: There is a lot of noise in this data (a lot of 0), but a majority of the people that are classified in the target feature appeared to have a value above ~50. So, I encoded the column as a biary column of above 50 hours or not.
+household_summary: Changed to a binary column of if they are the householder or not (largest seperation).
+tax_status: One hot encoded.
+citizenship: Changed into a binary column of whether they are a US citizen or not. Remove subsequent column about where they are from and where parents are from.
+
+
+
+
+```{r}
+# Education cleaning
+
+# Needs to be grouped
+
+new_order <- c(
+  "Less than 1st grade",
+  "1st 2nd 3rd or 4th grade",
+  "5th or 6th grade",
+  "7th and 8th grade",
+  "9th grade",
+  "10th grade",
+  "11th grade",
+  "12th grade no diploma",
+  "High school graduate",
+  "Some college but no degree",
+  "Associates degree-occup /vocational",
+  "Associates degree-academic program",
+  "Bachelors degree(BA AB BS)",
+  "Masters degree(MA MS MEng MEd MSW MBA)",
+  "Doctorate degree(PhD EdD)",
+  "Prof school degree (MD DDS DVM LLB JD)"
+)
+
+# Relevel the education_level column in df
+train1$education <- factor(train1$education, levels = new_order)
+
+train1 %>% 
+  count(education)
+
+# Columns Visualized
+train1 %>% 
+  ggplot(aes(age, color = as.factor(income_above_limit)))+
+  geom_density(alpha = 0.2)+
+  labs(title = 'Age Distribution by Target Classifier')
+
+train1 %>% 
+  group_by(education) %>% 
+  summarise(perc_above_limit = sum(income_above_limit) / n()) %>% 
+  ggplot(aes(education, perc_above_limit))+
+  geom_col()+
+  coord_flip()+
+  labs(title = 'Percent Above Limit by Education')
+
+train1 %>% 
+  group_by(marital_status) %>% 
+  summarise(perc_above_limit = sum(income_above_limit) / n()) %>% 
+  ggplot(aes(marital_status, perc_above_limit))+
+  geom_col()+
+  coord_flip()+
+  labs(title = 'Percent Above Limit by Marital Status')
+
+train1 %>% 
+  count(marital_status)
+
+train1 %>% 
+  group_by(race) %>% 
+  summarise(perc_above_limit = sum(income_above_limit) / n()) %>% 
+  ggplot(aes(race, perc_above_limit))+
+  geom_col()+
+  coord_flip()+
+  labs(title = 'Percent Above Limit by Race')
+
+train1 %>% 
+  group_by(is_hispanic) %>% 
+  summarise(perc_above_limit = sum(income_above_limit) / n()) %>% 
+  ggplot(aes(is_hispanic, perc_above_limit))+
+  geom_col()+
+  coord_flip()+
+  labs(title = 'Percent Above Limit by "Is Hispanic"')
+
+train1 %>% 
+  group_by(employment_commitment) %>% 
+  summarise(perc_above_limit = sum(income_above_limit) / n()) %>% 
+  ggplot(aes(employment_commitment, perc_above_limit))+
+  geom_col()+
+  coord_flip()+
+  labs(title = 'Percent Above Limit by "Employment Commitment"')
+
+train1 %>% 
+  ggplot(aes(wage_per_hour))+
+  geom_histogram()+
+  labs(title = "Most Wage Per Hour values are 0")
+
+train1 %>% 
+  ggplot(aes(working_week_per_year, income_above_limit))+
+  geom_jitter(alpha = 0.2)+
+  labs(title = 'Working Week Per Year Breakdown')
+
+train1 %>% 
+  count(industry_code_main) %>% 
+  mutate(perc = n / 150912) %>% 
+  arrange(desc(perc))
+
+train1 %>% 
+  group_by(household_summary) %>% 
+  summarise(perc_above_limit = sum(income_above_limit) / n()) %>% 
+  ggplot(aes(household_summary, perc_above_limit))+
+  geom_col()+
+  coord_flip()+
+  labs(title = 'Percent Above Limit by Household Summary')
+
+# What does this mean?
+train1 %>% 
+  ggplot(aes(total_employed, income_above_limit))+
+  geom_jitter(alpha = 0.2)
+
+train1 %>% 
+  group_by(tax_status) %>% 
+  summarise(perc_above_limit = sum(income_above_limit) / n()) %>% 
+  ggplot(aes(tax_status, perc_above_limit))+
+  geom_col()+
+  coord_flip()+
+  labs(title = 'Percent Above Limit by Tax Status')
+
+train1 %>% 
+  ggplot(aes(gains))+
+  geom_histogram()+
+  labs(title = "Gains Dist")
+
+train1 %>% 
+  ggplot(aes(losses))+
+  geom_histogram()+
+  labs(title = "Losses Dist")
+
+train1 %>% 
+  ggplot(aes(stocks_status))+
+  geom_histogram()+
+  labs(title = "Stocks Status Dist")
+
+train1 %>% 
+  group_by(citizenship) %>% 
+  summarise(perc_above_limit = sum(income_above_limit) / n()) %>% 
+  ggplot(aes(citizenship, perc_above_limit))+
+  geom_col()+
+  coord_flip()+
+  labs(title = 'Percent Above Limit by Citizenship')
+
+# Renaming and grouping cleaning step
+train2 <- train1 %>% 
+  mutate(education = case_when(
+    education %in% c("Less than 1st grade","1st 2nd 3rd or 4th grade",
+"5th or 6th grade","7th and 8th grade","9th grade","10th grade",
+"11th grade","12th grade no diploma") ~ "Less_than_HS",
+education %in% c("Doctorate degree(PhD EdD)", "Prof school degree (MD DDS DVM LLB JD)") ~ "PhD_or_greater",
+education %in% c('Associates degree-academic program', 'Associates degree-occup /vocational') ~ "Associates",
+education == 'Bachelors degree(BA AB BS)' ~ 'Bachelors',
+education == 'High school graduate' ~ "HS_Grad",
+education == 'Masters degree(MA MS MEng MEd MSW MBA)' ~ 'Masters',
+education == 'Some college but no degree' ~ 'Some_College',
+is.na(education) ~ 'Unknown',
+TRUE ~ education
+  ),
+race = case_when(
+  race == 'Asian or Pacific Islander' ~ 'Asian',
+  race == 'Amer Indian Aleut or Eskimo' ~ 'Native_American',
+  !(is_hispanic %in% c(NA, 'Do not know', 'All other')) ~ 'Hispanic', 
+  TRUE ~ race
+),
+marital_status = case_when(
+  marital_status %in% c('Married-A F spouse present', 'Married-civilian spouse present') ~ 'Married_Spouse_Present',
+  marital_status == 'Married-spouse absent' ~ 'Married_Spouse_Absent',
+  marital_status == 'Never married' ~ 'Unmarried',
+  TRUE ~ marital_status
+),
+week_working_hours_above_50 = case_when(
+  working_week_per_year >= 50 ~ 1,
+  TRUE ~ 0
+),
+head_of_house = case_when(
+  household_summary == 'Householder' ~ 1,
+  TRUE ~ 0
+),
+tax_status = case_when(
+  tax_status %in% c('Joint both 65+', 'Joint one under 65 & one 65+') ~ 'Joint_>=65',
+  tax_status == 'Joint both under 65' ~ 'Joint_<65',
+  tax_status == 'Head of household' ~ 'HoH',
+  TRUE ~ tax_status
+),
+us_citizen = case_when(
+  citizenship == 'Foreign born- Not a citizen of U S' ~ 0,
+  TRUE ~ 1
+),
+employment_status = case_when(
+  employment_commitment %in% c("Unemployed full-time", "Unemployed part- time", "Not in labor force") ~ 'Unemployed',
+  TRUE ~ "Employed"
+))
+
+# One-hot encoding
+cleaned_train <- cbind(train2, 
+      model.matrix(~ education - 1, data = train2), 
+      model.matrix(~ gender - 1, data = train2), 
+      model.matrix(~ race - 1, data = train2),
+      model.matrix(~ marital_status - 1, data = train2),
+      model.matrix(~ tax_status - 1, data = train2)) %>% 
+  select(-c(ID, 
+            education, 
+            gender, 
+            is_hispanic, 
+            race, 
+            marital_status, 
+            employment_commitment, # Review this
+            employment_stat, # Removing, because I am not sure what this means
+            wage_per_hour, # Removing because not sure what mean (scale is off and most values are 0)
+            working_week_per_year,
+            occupation_code, # Not sure what this represents
+            industry_code_main, # 30% of data is unknown
+            household_summary,
+            household_stat,
+            total_employed, # Not sure what this means
+            tax_status,
+            industry_code, 
+            mig_year,
+            gains, # Not enough data
+            losses, # Not enough data
+            stocks_status, # Not enough data
+            importance_of_record, # Don't know what means
+            country_of_birth_own,
+            country_of_birth_father,
+            country_of_birth_mother,
+            vet_benefit,
+            citizenship
+            )) 
+  
+employed_train <- cleaned_train %>% 
+  filter(employment_status == 'Employed')
+
+unemployed_train <- cleaned_train %>% 
+  filter(employment_status == 'Unemployed')
+
+```
+
+Cleaned dataset:
+
+```{r}
+employed_train %>% 
+  head(10)
+
+unemployed_train %>% 
+  head(10)
+```
+
+
+
+

@@ -1,0 +1,141 @@
+---
+title: "Explore models for analyzing cleaned income data: Random Forest"
+author: "Usha Sharma"
+date: '2024-03-10'
+output: html_document
+---
+
+```{r setup}
+# remove this when script is moved from folder "Code/usha" to filder "Code"
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+getwd()
+```
+
+```{r}
+# install required libraries
+if(!require(caTools)) install.packages("caTools",repos = "http://cran.us.r-project.org")
+if(!require(randomForest)) install.packages("randomForest",repos = "http://cran.us.r-project.org")
+
+# Loading package
+library(tidyverse)
+library(caTools) 
+library(randomForest) 
+```
+
+```{r}
+# Read data from saved dataset
+emp_train <- readRDS("temp_rds_files/employed_train.rds")
+head(emp_train, 10)
+
+unemp_train <- readRDS("temp_rds_files/unemployed_train.rds")
+head(unemp_train, 10)
+```
+
+```{r}
+# Remove ID (distinct for each row) and employment_status (all employed for this dataset)
+df1 = emp_train
+df1 <- df1 %>%
+  select(-c('ID', 'employment_status')) %>%
+  select(income_above_limit, everything()) %>%
+  mutate(income_above_limit = as.factor(income_above_limit))
+```
+
+```{r}
+shuffle_index <- sample(1:nrow(df1))
+head(shuffle_index)
+```
+
+```{r}
+# before shuffle
+head(df1)
+
+df1 <- df1[shuffle_index, ]
+head(df1)
+```
+
+
+
+```{r}
+# Splitting data in train and test data 
+split <- sample.split(df1, SplitRatio = 0.8) 
+split 
+  
+train <- subset(df1, split == "TRUE") 
+test <- subset(df1, split == "FALSE") 
+
+```
+```{r}
+head(train,10)
+temp = train[-1]
+head(temp,10)
+```
+
+```{r}
+# Fitting Random Forest to the train dataset
+# column 1 is the response 'y'
+# rest of the columns are predictors 'x'
+set.seed(120)  # Setting seed 
+rf_model = randomForest(x = train[-1], 
+                             y = train$income_above_limit, 
+                             ntree = 500) 
+  
+rf_model 
+```
+
+```{r}
+# Predicting the results with test data 
+y_pred = predict(rf_model, newdata = test[-1]) 
+```
+
+```{r}
+# Confusion Matrix with real response and predicted response
+confusion_matrix = table(test[, 1], y_pred) 
+confusion_matrix 
+```
+
+Accuracy
+
+```{r}
+sum(diag(confusion_matrix))/sum(confusion_matrix)
+```
+Precision: TP/(TP+FP)
+
+```{r}
+confusion_matrix[2,2]/(confusion_matrix[1,2] + confusion_matrix[2,2])
+```
+
+Get confusion matrix results using caret function
+```{r}
+if(!require(caret)) install.packages("caret",repos = "http://cran.us.r-project.org")
+
+library(caret)
+
+result <- confusionMatrix(y_pred, test[, 1])
+precision <- result$byClass['Pos Pred Value']    
+recall <- result$byClass['Sensitivity']
+
+```
+
+```{r}
+result
+precision
+recall
+```
+
+```{r}
+# Plotting model 
+plot(rf_model) 
+```
+
+```{r}
+# Importance plot 
+importance(rf_model) 
+```
+
+```{r}
+# Variable importance plot 
+varImpPlot(rf_model) 
+```
+
+Conclusion:
+It is seen that age, genderFemale and number of week_working_hours_above_50 are most important factors.

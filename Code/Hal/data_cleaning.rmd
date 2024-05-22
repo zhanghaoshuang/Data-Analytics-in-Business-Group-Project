@@ -1,0 +1,307 @@
+---
+title: "Data Cleaning MGT"
+author: "Hal Zhang"
+date: "2024-03-02"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+``` {r loading data, manipulating response variable, warning=FALSE, message=FALSE, echo=FALSE}
+library (dplyr)
+
+# keeping the relevant predictor variables and changing response variable to 0s and 1s
+
+data_income_full = read.table("../../Data/Train.csv",sep=",",header=TRUE)
+data_income = data_income_full[c("age","gender","education","class",
+                                 "marital_status","race","is_hispanic",
+                                 "employment_commitment",
+                                 "working_week_per_year",
+                                 "industry_code_main",
+                                 "occupation_code_main",
+                                 "household_stat","citizenship",
+                                 "country_of_birth_own","country_of_birth_father",
+                                 "country_of_birth_mother","income_above_limit",
+                                 "wage_per_hour")] 
+data_income=data_income %>% mutate (income_above_limit=     
+                            ifelse(income_above_limit=="Above limit",1,0))
+```
+
+
+- Change the response variable (income_above_limit) to binary with 1s and 0s. 
+
+``` {r analyzing age, echo=FALSE}
+library (ggplot2)
+
+# Analysis of age 
+unique_age=unique (data_income$age) #   no missing values 
+
+# consider getting rid of children, will calculate wage per hour for children 
+children_mean=data_income %>% filter (education==" Children") %>% 
+  summarise(mean(wage_per_hour,na.rm = TRUE))
+
+print ("The mean wage of children is 0 so can remove all less than 18")
+# Children have income of 0, maybe get rid of everyone under 18
+
+data_income_adults= filter (data_income,data_income$age>=18)
+
+avg_age= mean (data_income_adults$age)
+print (paste("The average age is:", avg_age))
+hist(data_income_adults$age)
+
+```
+
+## All analysis below will be done with children removed from data 
+
+``` {r gender analysis, echo=FALSE}
+# Analyzing gender
+unique_gender=unique (data_income_adults$gender) # no missing values
+
+# Need to get rid of space in front of female and male 
+data_income_adults$gender=trimws(data_income_adults$gender)
+
+percent_male= sum(data_income_adults$gender=="Male")/nrow(data_income_adults)*100
+print (paste("The percent of males in dataset is:", percent_male))
+
+```
+
+``` {r analysis of education, echo=FALSE, warning=FALSE,message=FALSE}
+library (dplyr)
+library(tidyverse)
+unique_education=unique (data_income_adults$education) # no missing values, need to clean values ]
+
+#trim leading white space 
+data_income_adults$education=trimws(data_income_adults$education)
+
+# Group less than high school as they are not statistically significant from each other 
+education_model= glm(income_above_limit~as.factor(education), data = data_income_adults)
+
+# Combined certain categories and shortened categories as well 
+
+data_income_adults <- data_income_adults %>% 
+  mutate(education = case_when(
+    education %in% c("Less than 1st grade","1st 2nd 3rd or 4th grade",
+"5th or 6th grade","7th and 8th grade","9th grade","10th grade",
+"11th grade","12th grade no diploma") ~ "<HS",
+education %in% c("Doctorate degree(PhD EdD)", "Prof school degree (MD DDS DVM LLB JD)") ~ "Doctorate", education %in% c("Some college but no degree") ~"Part College", education %in% c("Bachelors degree(BA AB BS)") ~"College", education %in% c("Associates degree-academic program") ~"Associates-A", education %in% c("Associates degree-occup /vocational") ~"Associates-O", education %in% c("High school graduate") ~"HS", education %in% c("Masters degree(MA MS MEng MEd MSW MBA)")~"Masters", 
+TRUE ~ education
+  ))
+
+# Plotting each education category and the percent above income 
+
+data_income_adults %>% 
+  group_by(education) %>% 
+  summarise(perc_income_above_limit = sum(income_above_limit) / n()) %>% 
+  ggplot(aes(education, perc_income_above_limit))+
+  geom_col()+
+  coord_flip()+
+  ggtitle("Percent Above Income Limit in Each Education Category")
+
+```
+- combined all people with education below high school to <HS, combined all doctorate degrees (MD, JD, PhD, etc.) to doctorate, shortened other categories, most are self explanatory. 
+- Associates O is Associates with occupational focus 
+- Associates A is Associates with academic focus
+
+
+``` {r class analysis, echo=FALSE, warning=FALSE}
+unique_class=unique (data_income_adults$class) # missing value is blank string 
+data_income_adults$class=ifelse(data_income_adults$class=="",NA,data_income_adults$class) # changed to NA
+print (paste("Missing value for class is blank string. Percent of NA:,",sum (is.na(data_income_adults$class))/nrow(data_income_adults)*100)) # number of NAs in class
+data_income_adults=data_income_adults %>% select(-class)
+```
+- too many NAs in the class column also not totally sure if this will be relevant to our analysis so eliminated column from data 
+
+``` {r martial analysis, echo=FALSE}
+
+unique_marital=unique (data_income$marital_status) # no missing values, need to clean values
+
+#trim leading white space 
+data_income_adults$marital_status=trimws(data_income_adults$marital_status)
+
+# Will changed into single and married, those would be the main categories we're concerning about  
+
+data_income_adults <- data_income_adults %>% 
+  mutate(marital_status = case_when(
+    marital_status %in% c("Widowed","Never married",
+"Divorced") ~ "Single",
+marital_status %in% c("Separated", "Married-civilian spouse present", "Married-spouse absent","Married-A F spouse present") ~ "Married",
+TRUE ~ marital_status
+  ))
+```
+
+- combined categories of marital_status column to just single and married, if want to do further analysis on this column can consider separating the married category into married living with spouse and living without (could potentially change income but unsure)
+
+``` {r analyzing race, echo=FALSE}
+unique_race=unique (data_income_adults$race) # no missing values
+#trim leading white space 
+data_income_adults$race=trimws(data_income_adults$race)
+
+unique_hispanic= unique (data_income_adults$is_hispanic) # Missing value is NA but not NA object
+
+#trim leading white space 
+data_income_adults$is_hispanic=trimws(data_income_adults$is_hispanic)
+
+data_income_adults$is_hispanic=ifelse(data_income_adults$is_hispanic=="NA",
+                               NA,data_income_adults$is_hispanic)
+
+print (paste("Missing value for is_hispanic is NA string. Percent of NA:,",sum (is.na(data_income_adults$is_hispanic))/nrow(data_income_adults)*100))
+
+# Change is_hispanic category to 1 or 0
+
+data_income_adults <- data_income_adults %>% 
+  mutate(is_hispanic = ifelse(is_hispanic %in% c("All other","Do not know",NA),0,1))
+
+# will simply replace race with hispanic if is_hispanic is yes 
+data_income_adults <- data_income_adults %>% 
+  mutate(race= ifelse(is_hispanic==1, "Hispanic",race))
+
+race_count=data_income_adults %>% group_by(race) %>% count()
+total_race= sum(race_count$n)
+race_count %>% mutate (race_percent=n/total_race*100)
+
+
+```
+
+- changed the is_hispanic column to just 0s and 1s and incorporated that into the race column 
+``` {r work week analysis, echo=FALSE}
+
+unique_working=unique (data_income_adults$working_week_per_year) # no missing values
+
+# no further analysis needed 
+```
+
+
+``` {r industry analysis, echo=FALSE}
+
+unique_industry_main=unique (data_income_adults$industry_code_main) # no missing values
+
+#trim leading white space 
+data_income_adults$industry_code_main=trimws(data_income_adults$industry_code_main)
+
+```
+
+``` {r household analysis, echo=FALSE}
+unique_household=unique (data_income$household_stat) # no missing values
+data_income_adults=data_income_adults%>% select (-household_stat)
+```
+- really confusing what exactly the household_stat column is telling us. Definitely says how they're part of the household but not sure if helpful as too many options so will take out 
+
+
+``` {r citizen analysis,echo=FALSE}
+
+unique_citizenship=unique (data_income$citizenship) # no missing values
+
+#trim leading white space 
+data_income_adults$citizenship=trimws(data_income_adults$citizenship)
+
+# change into two categories, citizen (1) and non-citizen (0) 
+data_income_adults=data_income_adults%>%
+  mutate (citizenship= ifelse(citizenship=="Foreign born- Not a citizen of U S",0,1))
+
+# calculate percent citizens 
+print (paste("The percent of adults who are citizens:", sum(data_income_adults$citizenship)/nrow(data_income_adults)*100))
+
+```
+- changed the column of citizenship to a binary variable of whether a person is a US citizen or not 
+
+``` {r birth country analysis,echo=FALSE}
+
+unique_birth_own=unique (data_income_adults$country_of_birth_own) #? is for NA values 
+
+#trim leading white space 
+data_income_adults$country_of_birth_own=trimws(data_income_adults$country_of_birth_own)
+
+data_income_adults$country_of_birth_own=ifelse(data_income_adults$country_of_birth_own=="?",NA,data_income_adults$country_of_birth_own)
+
+print (paste("Missing value for country_of_birth_own is ?. Percents of NAs:,",sum (is.na(data_income_adults$country_of_birth_own))/nrow(data_income_adults)*100))
+
+unique_birth_father= unique (data_income$country_of_birth_father) #? is for NA values 
+
+#trim leading white space 
+data_income_adults$country_of_birth_father=trimws(data_income_adults$country_of_birth_father)
+
+data_income_adults$country_of_birth_father=
+  ifelse(data_income_adults$country_of_birth_father=="?",
+  NA,data_income_adults$country_of_birth_father)
+print (paste("Missing value for country_of_birth_own is ?. Percent of NAs:,",sum (is.na(data_income_adults$country_of_birth_father))/nrow(data_income_adults)*100))
+
+unique_birth_mother=unique (data_income_adults$country_of_birth_mother) #? is for NA values 
+
+#trim leading white space 
+data_income_adults$country_of_birth_mother=trimws(data_income_adults$country_of_birth_mother)
+
+data_income_adults$country_of_birth_mother=
+  ifelse(data_income_adults$country_of_birth_mother=="?",
+  NA,data_income_adults$country_of_birth_mother)
+
+print (paste("Missing value for country_of_birth_own is ?. Percent of NAs:,",sum (is.na(data_income$country_of_birth_mother))/nrow(data_income_adults)*100))
+
+```
+
+- nothing really done to the columns of birth country of person, their mothers and fathers however I will create three extra columns that are binary saying whether they are born in US or not. I decided to leave these columns that say where exactly they were born in case we want to use this data 
+
+``` {r create columns of person born in US or not, father, mother born in US or not, echo=FALSE}
+
+data_income_adults=data_income_adults %>% 
+  mutate(born_in_US_own= ifelse(country_of_birth_own=="US"| 
+                         country_of_birth_own=="Outlying-U S (Guam USVI etc)",
+                         1,0))
+data_income_adults=data_income_adults %>% 
+  mutate(born_in_US_father= ifelse(country_of_birth_father=="US"| 
+                        country_of_birth_father=="Outlying-U S (Guam USVI etc)",
+                        1,0))
+data_income_adults=data_income_adults %>% 
+  mutate(born_in_US_mother= ifelse(country_of_birth_mother=="US"| 
+                        country_of_birth_mother=="Outlying-U S (Guam USVI etc)",
+                        1,0))
+```
+
+- as I mentioned above, added columns of born_in_US_own, father, mother as binaries, 1 if they are born in US, 0 if they are not 
+
+``` {r looking deeper into wage_per_hour, echo=FALSE}
+summary(unique (data_income$wage_per_hour))
+# get rid of 0s and see spread 
+wage= data_income$wage_per_hour[data_income$wage_per_hour!=0]
+
+hist(wage)
+
+data_income_adults=data_income_adults %>% select (-wage_per_hour) 
+```
+
+- Not sure what units the wage per unit is in and they are inconsistent so we shouldn't use it. Got rid of column from data frame 
+
+``` {r employment analysis,echo=FALSE}
+
+unique_employment=unique (data_income$employment_commitment) # no missing values, need to clean values
+
+#Plotting all the differnt types of employment commitments 
+ggplot (data_income_adults, aes(x=employment_commitment))+geom_bar()+ coord_flip()
+
+# separate adults who are unemployed and who are employed into two different data frames 
+
+data_income_adults_employed= data_income_adults %>% 
+  filter (employment_commitment!=" Not in labor force" &
+            employment_commitment!=" Unemployed full-time" &
+            employment_commitment!=" Unemployed part- time" &
+            employment_commitment!=" Children or Armed Forces")
+
+data_income_adults_umemployed= data_income_adults %>% 
+  filter (employment_commitment==" Not in labor force" |
+            employment_commitment==" Unemployed full-time" |
+            employment_commitment==" Unemployed part- time" |
+            employment_commitment==" Children or Armed Forces")
+
+```
+- split the data frame into unemployed and employed. data_income_adults_employed and data_income_adults_unemployed
+
+``` {r occupation analysis,echo=FALSE}
+unique_occupation_main= unique(data_income_adults_employed$occupation_code_main) # No missing values after eliminating the unemployed 
+
+#trim leading white space 
+data_income_adults_employed$occupation_code_main=trimws(data_income_adults_employed$occupation_code_main)
+
+```
+
+- looks like everyone who is employed does have an occupation_main filled in 

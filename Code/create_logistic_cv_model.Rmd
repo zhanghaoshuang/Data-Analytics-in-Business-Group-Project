@@ -1,0 +1,252 @@
+---
+title: "Explore models for analyzing cleaned income data: logistic regression with cross vaidation"
+author: "Usha Sharma"
+date: '2024-03-06'
+output: html_document
+---
+
+```{r setup}
+# remove this when script is moved from my folder to Code
+knitr::opts_knit$set(root.dir = normalizePath("."))
+#getwd()
+```
+
+# load required libraries
+```{r}
+library(tidyverse)
+install.packages("caret",repos = "http://cran.us.r-project.org")
+library(caret)
+```
+    
+```{r}
+# Read data from saved datasets
+
+# cross_validation datasets for training and cross validation 
+emp_full_cv <- readRDS("temp_rds_files/employed_full_cross_valid.rds")
+emp_us_cv <- readRDS("temp_rds_files/employed_undersample_cross_valid.rds")
+emp_os_cv <- readRDS("temp_rds_files/employed_oversample_cross_valid.rds")
+
+# Test datasets for testing the chosen model
+emp_full_test <- readRDS("temp_rds_files/employed_full_test.rds")
+emp_us_test <- readRDS("temp_rds_files/employed_undersample_test.rds")
+emp_os_test <- readRDS("temp_rds_files/employed_oversample_test.rds")
+
+head(emp_full_cv, 10)
+head(emp_us_cv, 10)
+head(emp_os_cv, 10)
+head(emp_full_test, 10)
+head(emp_us_test, 10)
+head(emp_os_test, 10)
+
+```
+
+```{r}
+# Size of each dataset:
+sprintf("Size for emp_full_cv:%d", nrow(emp_full_cv))
+sprintf("Size for emp_us_cv:%d", nrow(emp_us_cv))
+sprintf("Size for emp_os_cv:%d", nrow(emp_os_cv))
+```
+
+# Model for emp_full_cv
+
+```{r}
+df_train = emp_full_cv
+df_train <- df_train %>%
+  select(-c('employment_status')) %>%
+  select(income_above_limit, everything()) %>%
+  mutate(income_above_limit = as.factor(income_above_limit))
+
+df_test = emp_full_test
+df_test <- df_test %>%
+  select(-c('employment_status')) %>%
+  select(income_above_limit, everything()) %>%
+  mutate(income_above_limit = as.factor(income_above_limit))
+
+head(df_train, 10)
+head(df_test, 10)
+```
+
+```{r}
+# logistic regression model
+start_time <- Sys.time()
+
+emp_full_model <- train(
+  x = select(df_train,-income_above_limit),
+  y = df_train$income_above_limit,
+  method = "glm",
+  family = "binomial",
+  trControl = trainControl(method = "cv", number = 5, classProbs = FALSE)
+)
+end_time <- Sys.time()
+
+# cross-validated results
+print(emp_full_model)
+summary(emp_full_model)
+
+# print time taken for training
+time_taken <- end_time - start_time
+```
+
+
+```{r}
+sprintf("Time taken for training emp_full_cv:%s seconds", time_taken)
+```
+
+
+```{r}
+# predictions on test set
+predictions <- predict(emp_full_model, newdata = select(df_test, -income_above_limit))
+```
+
+
+```{r}
+# accuracy on test set
+confusionMatrix_test <- confusionMatrix(data = predictions, reference = df_test$income_above_limit, positive='1')
+confusionMatrix_test
+test_accuracy <- confusionMatrix_test$overall["Accuracy"]
+print(paste("Original model Accuracy:", round(test_accuracy, 3)))
+
+balanced_accuracy <- (confusionMatrix_test$byClass["Sensitivity"] + confusionMatrix_test$byClass["Specificity"]) / 2
+print(paste("Original model Sensitivity: ", round(confusionMatrix_test$byClass["Sensitivity"], 3)))
+print(paste("Original model Specificity: ", round(confusionMatrix_test$byClass["Specificity"], 3)))
+print(paste("Original model Balanced Accuracy:", round(balanced_accuracy, 3)))
+```
+
+# Model for emp_us_cv
+
+```{r}
+df_train = emp_us_cv
+df_train <- df_train %>%
+  select(-c('employment_status')) %>%
+  select(income_above_limit, everything()) %>%
+  mutate(income_above_limit = as.factor(income_above_limit))
+
+# Use full data for testing
+df_test = emp_full_test
+# df_test = emp_us_test
+df_test <- df_test %>%
+  select(-c('employment_status')) %>%
+  select(income_above_limit, everything()) %>%
+  mutate(income_above_limit = as.factor(income_above_limit))
+
+head(df_train, 10)
+head(df_test, 10)
+```
+
+```{r}
+# logistic regression model
+start_time <- Sys.time()
+
+emp_us_model <- train(
+  x = select(df_train,-income_above_limit),
+  y = df_train$income_above_limit,
+  method = "glm",
+  family = "binomial",
+  trControl = trainControl(method = "cv", number = 5, classProbs = FALSE)
+)
+end_time <- Sys.time()
+
+# cross-validated results
+print(emp_us_model)
+summary(emp_us_model)
+
+# print time taken for training
+time_taken <- end_time - start_time
+```
+
+
+```{r}
+sprintf("Time taken for training emp_us_cv:%s seconds", time_taken)
+```
+
+
+```{r}
+# predictions on test set
+predictions <- predict(emp_us_model, newdata = select(df_test, -income_above_limit))
+```
+
+
+```{r}
+# accuracy on test set
+confusionMatrix_test <- confusionMatrix(data = predictions, reference = df_test$income_above_limit, positive='1')
+confusionMatrix_test
+test_accuracy <- confusionMatrix_test$overall["Accuracy"]
+print(paste("Undersampled model Accuracy:", round(test_accuracy, 3)))
+
+balanced_accuracy <- (confusionMatrix_test$byClass["Sensitivity"] + confusionMatrix_test$byClass["Specificity"]) / 2
+print(paste("Undersampled model Sensitivity: ", round(confusionMatrix_test$byClass["Sensitivity"], 3)))
+print(paste("Undersampled model Specificity: ", round(confusionMatrix_test$byClass["Specificity"], 3)))
+print(paste("Undersampled model Balanced Accuracy:", round(balanced_accuracy, 3)))
+```
+
+# Model for emp_os_cv
+
+```{r}
+df_train = emp_os_cv
+df_train <- df_train %>%
+  select(-c('employment_status')) %>%
+  select(income_above_limit, everything()) %>%
+  mutate(income_above_limit = as.factor(income_above_limit))
+
+# Use full data for testing
+df_test = emp_full_test
+# df_test = emp_os_test
+
+df_test <- df_test %>%
+  select(-c('employment_status')) %>%
+  select(income_above_limit, everything()) %>%
+  mutate(income_above_limit = as.factor(income_above_limit))
+
+head(df_train, 10)
+head(df_test, 10)
+```
+
+```{r}
+# logistic regression model
+start_time <- Sys.time()
+
+emp_os_model <- train(
+  x = select(df_train,-income_above_limit),
+  y = df_train$income_above_limit,
+  method = "glm",
+  family = "binomial",
+  trControl = trainControl(method = "cv", number = 5, classProbs = FALSE)
+)
+end_time <- Sys.time()
+
+# cross-validated results
+print(emp_os_model)
+summary(emp_os_model)
+
+# print time taken for training
+time_taken <- end_time - start_time
+```
+
+
+```{r}
+sprintf("Time taken for training emp_os_cv:%s seconds", time_taken)
+```
+
+
+```{r}
+# predictions on test set
+predictions <- predict(emp_os_model, newdata = select(df_test, -income_above_limit))
+```
+
+
+```{r}
+# accuracy on test set
+confusionMatrix_test <- confusionMatrix(data = predictions, reference = df_test$income_above_limit, positive='1')
+confusionMatrix_test
+test_accuracy <- confusionMatrix_test$overall["Accuracy"]
+print(paste("Oversampled model Accuracy:", round(test_accuracy, 3)))
+
+balanced_accuracy <- (confusionMatrix_test$byClass["Sensitivity"] + confusionMatrix_test$byClass["Specificity"]) / 2
+print(paste("Oversampled model Sensitivity: ", round(confusionMatrix_test$byClass["Sensitivity"], 3)))
+print(paste("Oversampled model Specificity: ", round(confusionMatrix_test$byClass["Specificity"], 3)))
+print(paste("Oversampled model Balanced Accuracy:", round(balanced_accuracy, 3)))
+
+```
+
+
+

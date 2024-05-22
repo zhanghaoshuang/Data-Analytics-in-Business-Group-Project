@@ -1,0 +1,152 @@
+---
+title: "compare_models"
+author: "Carlos Moncada"
+date: "2024-03-10"
+output: html_document
+---
+
+```{r}
+if(!require(caret)) install.packages("caret")
+if(!require(glmnet)) install.packages("glmnet")
+if(!require(randomForest)) install.packages("randomForest")
+if(!require(klaR)) install.packages("klaR")
+if(!require(gbm)) install.packages("gbm")
+if(!require(dplyr)) install.packages("dplyr")
+
+library(caret)
+library(glmnet)
+library(dplyr)
+library(randomForest)
+library(klaR)
+library(gbm)
+
+set.seed(1234) # for reproducibility
+```
+
+```{r}
+employed_full_cross_valid <- dplyr::select(employed_full_cross_valid, -employment_status)
+employed_full_cross_valid$income_above_limit <- as.factor(employed_full_cross_valid$income_above_limit)
+str(employed_full_cross_valid)
+
+employed_full_test <- dplyr::select(employed_full_test, -employment_status)
+employed_full_test$income_above_limit <- as.factor(employed_full_test$income_above_limit)
+
+```
+
+```{r}
+# Ensure the outcome variable is a factor
+employed_full_cross_valid$income_above_limit <- factor(employed_full_cross_valid$income_above_limit)
+
+# Rename factor levels to valid R variable names
+levels(employed_full_cross_valid$income_above_limit) <- make.names(levels(employed_full_cross_valid$income_above_limit), unique = TRUE)
+
+# Define training control
+train_control <- trainControl(method = "cv", number = 10, savePredictions = "final", classProbs = TRUE, summaryFunction = twoClassSummary)
+
+# Logistic Regression
+model_logistic <- train(income_above_limit ~ ., data = employed_full_cross_valid, method = "glm", family = "binomial", trControl = train_control, metric = "ROC")
+
+# Random Forest
+model_rf <- train(income_above_limit ~ ., data = employed_full_cross_valid, method = "rf", trControl = train_control, metric = "ROC", tuneLength = 5)
+
+# K-Nearest Neighbors
+model_knn <- train(income_above_limit ~ ., data = employed_full_cross_valid, method = "knn", trControl = train_control, metric = "ROC", tuneLength = 5)
+
+# Naive Bayes
+model_nb <- train(income_above_limit ~ ., data=employed_full_cross_valid, method="naive_bayes", trControl=train_control, metric="ROC")
+
+# GBM
+model_gbm <- train(
+  income_above_limit ~ ., 
+  data = employed_full_cross_valid, 
+  method = "gbm", 
+  verbose = FALSE, 
+  trControl = train_control, 
+  metric = "ROC", 
+  tuneGrid = expand.grid(
+    interaction.depth = 1:5, 
+    n.trees = 50:100, 
+    shrinkage = c(0.01, 0.1),
+    n.minobsinnode = c(10)
+  ),
+  tuneLength = 5
+)
+
+# Print the results
+results <- resamples(list(
+  Logistic=model_logistic,
+  RandomForest=model_rf,
+  KNN=model_knn,
+  NaiveBayes=model_nb,
+  GBM=model_gbm
+))
+
+summary(results)
+
+```
+
+```{r}
+employed_full_oversample <- dplyr::select(employed_full_oversample, -employment_status)
+employed_full_oversample$income_above_limit <- as.factor(employed_full_oversample$income_above_limit)
+str(employed_full_oversample)
+
+```
+
+```{r}
+# Ensure the outcome variable is a factor
+employed_full_oversample$income_above_limit <- factor(employed_full_oversample$income_above_limit)
+
+# Rename factor levels to valid R variable names
+levels(employed_full_oversample$income_above_limit) <- make.names(levels(employed_full_oversample$income_above_limit), unique = TRUE)
+
+# Define training control
+train_control <- trainControl(method = "cv", number = 10, savePredictions = "final", classProbs = TRUE, summaryFunction = twoClassSummary)
+
+# Logistic Regression
+model_logistic_over <- train(income_above_limit ~ ., data = employed_full_oversample, method = "glm", family = "binomial", trControl = train_control, metric = "ROC")
+
+# Random Forest
+model_rf_over <- train(income_above_limit ~ ., data = employed_full_oversample, method = "rf", trControl = train_control, metric = "ROC", tuneLength = 5)
+
+# K-Nearest Neighbors
+model_knn_over <- train(income_above_limit ~ ., data = employed_full_oversample, method = "knn", trControl = train_control, metric = "ROC", tuneLength = 5)
+
+# Naive Bayes
+model_nb_over <- train(income_above_limit ~ ., data=employed_full_oversample, method="naive_bayes", trControl=train_control, metric="ROC")
+
+# GBM
+model_gbm_over <- train(
+  income_above_limit ~ ., 
+  data = employed_full_oversample, 
+  method = "gbm", 
+  verbose = FALSE, 
+  trControl = train_control, 
+  metric = "ROC", 
+  tuneGrid = expand.grid(
+    interaction.depth = 1:5, 
+    n.trees = 50:100, 
+    shrinkage = c(0.01, 0.1),
+    n.minobsinnode = c(10)
+  ),
+  tuneLength = 5
+)
+
+# Print the results
+results_over <- resamples(list(
+  Logistic=model_logistic_over,
+  RandomForest=model_rf_over,
+  KNN=model_knn_over,
+  NaiveBayes=model_nb_over,
+  GBM=model_gbm_over
+))
+
+summary(results_over)
+
+```
+
+```{r}
+employed_full_undersample <- dplyr::select(employed_full_undersample, -employment_status)
+employed_full_undersample$income_above_limit <- as.factor(employed_full_undersample$income_above_limit)
+str(employed_full_undersample)
+
+```

@@ -1,0 +1,208 @@
+---
+title: "predictModels"
+author: "Ngoc Le"
+date: "2024-03-08"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Installing packages
+
+```{r}
+if(!require(tidyverse)) install.packages("tidyverse")
+if(!require(caTools)) install.packages("caTools")
+if(!require(tree)) install.packages("tree")
+if(!require(e1071)) install.packages("e1071")
+if(!require(gmodels)) install.packages("gmodels")
+```
+
+Loading packages
+
+```{r}
+library(tidyverse)
+library(caTools)
+library(tree)
+library(e1071)
+library(gmodels)
+```
+
+Reading data from RDS file
+
+```{r}
+
+emp_df <- readRDS("../Ngoc/employed_train.rds")
+
+```
+
+Removing ID and employment_status columns
+Reordering the order of the columns
+Recasting income_above_limit as factor
+
+```{r}
+emp_df <- emp_df %>%
+  select(-c('ID', 'employment_status')) %>%
+  select(income_above_limit, everything()) %>%
+  mutate(income_above_limit = as.factor(income_above_limit))
+```
+
+Splitting data into two datasets: train and test dataset
+
+```{r}
+sample <- sample.split(emp_df$income_above_limit, SplitRatio = .8)
+train <- subset(emp_df, sample==TRUE)
+test <- subset(emp_df, sample==FALSE)
+```
+
+Fitting a tree model with income_above_limit as dependent variable
+and the rest of the features as the independent variables
+
+```{r}
+model.tree <- tree(income_above_limit ~ ., data = train)
+```
+
+Plotting the model
+
+```{r}
+plot(model.tree)
+text(model.tree, cex = .7)
+```
+
+Print the summary
+
+```{r}
+summary(model.tree)
+```
+Rerunning a tree model with income_above_limit as dependent variable
+and week_working_hours_above_50, genderFemale, age, educationHS_Grad, educationLess_than_HS, and educationSome_College
+as the independent variables
+
+```{r}
+model.tree <- tree(income_above_limit ~ week_working_hours_above_50 + genderFemale + age + educationHS_Grad + educationLess_than_HS + educationSome_College, data = train)
+
+summary(model.tree)
+```
+
+
+Make a prediction
+
+```{r}
+incomePred.Tree <- predict(model.tree, test, type = 'class')
+```
+
+Confusion Matrix
+
+```{r}
+CF.Tree <- table(Actual = test$income_above_limit, Predict = incomePred.Tree)
+CF.Tree
+```
+Accuracy
+
+```{r}
+sum(diag(CF.Tree))/sum(CF.Tree)
+# 1st model 0.9079247
+# 2nd model 0.8990471
+
+```
+Precision
+
+```{r}
+CF.Tree[2,2]/(CF.Tree[2,1] + CF.Tree[2,2])
+# 1st model 0.2012908
+# 2nd 0
+```
+Fitting a logistic model with income_above_limit as dependent variable
+and the rest of the features as the independent variables
+
+```{r}
+model.glm <- glm(income_above_limit ~ ., family = 'binomial', data = train)
+```
+
+Print the summary
+
+```{r}
+summary(model.glm)
+```
+
+Making a prediction
+
+```{r}
+incomePred.glm <- predict(model.glm, test, type = 'response')
+```
+
+Confusion Matrix
+
+```{r}
+CF.glm <- table(Actual = test$income_above_limit, Predict = incomePred.glm > .5)
+CF.glm
+```
+
+Accuracy
+
+```{r}
+sum(diag(CF.glm))/sum(CF.glm)
+# 0.9090243
+# 0.909105
+```
+Precision
+
+```{r}
+CF.glm[2,2]/(CF.glm[2,1] + CF.glm[2,2])
+# 0.2012908
+# 0.2476805
+```
+Creating Naive Bayes model
+
+Splitting the data frame into two pieces: the attributes, and the dependent variable
+
+```{r}
+train.att <- train[-1] # att attributes
+train.res <- train$income_above_limit # res response
+
+test.att <- test[-1]
+test.res <- test$income_above_limit
+```
+
+Fitting a Naive Bayes model with income_above_limit as dependent variable
+and the rest of the features as the independent variables
+
+```{r}
+model.NB <- naiveBayes(train.att, train.res)
+summary(model.NB)
+```
+
+Make a prediction
+
+```{r}
+incomePred.NB <- predict(model.NB, test.att, type="class", laplace=0)
+```
+
+Confusion Matrix
+
+```{r}
+
+CF.NB <- table(Actual = test.res, Predict = incomePred.NB)
+CF.NB
+
+```
+
+Accuracy
+
+```{r}
+
+sum(diag(CF.NB))/sum(CF.NB)
+# 0.7057338
+# 0.6541782
+```
+and the rest of the features as the independent variables
+
+```{r}
+
+CF.NB[2,2]/(CF.NB[2,1] + CF.NB[2,2])
+# 0.7862041
+# 0.8039532
+```
+
+

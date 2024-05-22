@@ -1,0 +1,200 @@
+---
+title: "KNN_model"
+author: "Carlos Moncada"
+date: "2024-04-09"
+output: html_document
+---
+
+```{r}
+if(!require(caret)) install.packages("caret")
+if(!require(glmnet)) install.packages("glmnet")
+if(!require(randomForest)) install.packages("randomForest")
+if(!require(klaR)) install.packages("klaR")
+if(!require(gbm)) install.packages("gbm")
+if(!require(dplyr)) install.packages("dplyr")
+
+library(caret)
+library(glmnet)
+library(dplyr)
+library(randomForest)
+library(klaR)
+library(gbm)
+
+set.seed(1234) # for reproducibility
+
+```
+
+```{r}
+# Read datasets
+# Cross Validation datasets
+employed_full_cv <- readRDS("temp_rds_files/employed_full_cross_valid.rds")
+employed_undersample_cv <- readRDS("temp_rds_files/employed_undersample_cross_valid.rds")
+employed_oversample_cv <- readRDS("temp_rds_files/employed_oversample_cross_valid.rds")
+
+# Test datasets
+employed_full_test <- readRDS("temp_rds_files/employed_full_test.rds")
+employed_undersample_test <- readRDS("temp_rds_files/employed_undersample_test.rds")
+employed_oversample_test <- readRDS("temp_rds_files/employed_oversample_test.rds")
+
+```
+
+```{r}
+employed_full_cv <- dplyr::select(employed_full_cv, -employment_status)
+employed_full_cv$income_above_limit <- as.factor(employed_full_cv$income_above_limit)
+
+employed_full_test <- dplyr::select(employed_full_test, -employment_status)
+employed_full_test$income_above_limit <- as.factor(employed_full_test$income_above_limit)
+
+# Rename factor levels to valid R variable names
+levels(employed_full_cv$income_above_limit) <- make.names(levels(employed_full_cv$income_above_limit), unique = TRUE)
+
+```
+
+```{r}
+# Define training control
+train_control <- trainControl(method = "cv", number = 10, savePredictions = "final", classProbs = TRUE, summaryFunction = twoClassSummary)
+
+k_values <- seq(3, 11, by = 1)
+knnGrid <- expand.grid(k = k_values)
+
+model_knn <- train(income_above_limit ~ ., data = employed_full_cv, method = "knn", trControl = train_control, tuneGrid = knnGrid, metric = "ROC")
+
+print(model_knn)
+plot(model_knn)
+
+```
+
+```{r}
+# Calculate variable importance
+var_imp <- varImp(model_knn)
+
+# Plot variable importance
+plot(var_imp, main = "KNN full model - Variable Importance Plot")
+```
+
+```{r}
+# Print the confusion matrix
+conf_matrix <- confusionMatrix(predict(model_knn), employed_full_cv$income_above_limit, positive = "X1")
+print(conf_matrix)
+
+```
+
+```{r}
+# Rename factor levels to valid R variable names
+levels(employed_full_test$income_above_limit) <- make.names(levels(employed_full_test$income_above_limit), unique = TRUE)
+
+# Make predictions on the test set
+test_predictions <- predict(model_knn, newdata = employed_full_test)
+
+# Create the confusion matrix
+conf_matrix_test <- confusionMatrix(test_predictions, employed_full_test$income_above_limit, positive = "X1")
+
+# Print the confusion matrix for the test set
+print(conf_matrix_test)
+
+```
+
+```{r}
+employed_oversample_cv <- dplyr::select(employed_oversample_cv, -employment_status)
+employed_oversample_cv$income_above_limit <- as.factor(employed_oversample_cv$income_above_limit)
+
+employed_oversample_test <- dplyr::select(employed_oversample_test, -employment_status)
+employed_oversample_test$income_above_limit <- as.factor(employed_oversample_test$income_above_limit)
+
+# Rename factor levels to valid R variable names
+levels(employed_oversample_cv$income_above_limit) <- make.names(levels(employed_oversample_cv$income_above_limit), unique = TRUE)
+```
+
+```{r}
+# Define training control
+train_control <- trainControl(method = "cv", number = 10, savePredictions = "final", classProbs = TRUE, summaryFunction = twoClassSummary)
+
+k_values <- seq(3, 11, by = 1)
+knnGrid <- expand.grid(k = k_values)
+
+model_knn_over <- train(income_above_limit ~ ., data = employed_oversample_cv, method = "knn", trControl = train_control, tuneGrid = knnGrid, metric = "ROC")
+
+print(model_knn_over)
+plot(model_knn_over)
+
+```
+
+```{r}
+# Calculate variable importance
+var_imp <- varImp(model_knn_over)
+
+# Plot variable importance
+plot(var_imp, main = "KNN Oversampled Model - Variable Importance Plot")
+```
+
+```{r}
+# Print the confusion matrix
+conf_matrix_over <- confusionMatrix(predict(model_knn_over), employed_oversample_cv$income_above_limit, positive = "X1")
+print(conf_matrix_over)
+
+```
+
+```{r}
+# Make predictions on the test set
+test_predictions_over <- predict(model_knn_over, newdata = employed_full_test)
+
+# Create the confusion matrix
+conf_matrix_test_over <- confusionMatrix(test_predictions_over, employed_full_test$income_above_limit, positive = "X1")
+
+# Print the confusion matrix for the test set
+print(conf_matrix_test_over)
+
+```
+
+```{r}
+employed_undersample_cv <- dplyr::select(employed_undersample_cv, -employment_status)
+employed_undersample_cv$income_above_limit <- as.factor(employed_undersample_cv$income_above_limit)
+
+employed_undersample_test <- dplyr::select(employed_undersample_test, -employment_status)
+employed_undersample_test$income_above_limit <- as.factor(employed_undersample_test$income_above_limit)
+
+# Rename factor levels to valid R variable names
+levels(employed_undersample_cv$income_above_limit) <- make.names(levels(employed_undersample_cv$income_above_limit), unique = TRUE)
+
+```
+
+```{r}
+# Define training control
+train_control <- trainControl(method = "cv", number = 10, savePredictions = "final", classProbs = TRUE, summaryFunction = twoClassSummary)
+
+k_values <- seq(3, 11, by = 1)
+knnGrid <- expand.grid(k = k_values)
+
+model_knn_under <- train(income_above_limit ~ ., data = employed_undersample_cv, method = "knn", trControl = train_control, tuneGrid = knnGrid, metric = "ROC")
+
+print(model_knn_under)
+plot(model_knn_under)
+
+```
+
+```{r}
+# Calculate variable importance
+var_imp <- varImp(model_knn_under)
+
+# Plot variable importance
+plot(var_imp, main = "KNN Undersampled Model - Variable Importance Plot")
+```
+
+```{r}
+# Print the confusion matrix
+conf_matrix_under <- confusionMatrix(predict(model_knn_under), employed_undersample_cv$income_above_limit, positive = "X1")
+print(conf_matrix_under)
+
+```
+
+```{r}
+# Make predictions on the test set
+test_predictions_under <- predict(model_knn_under, newdata = employed_full_test)
+
+# Create the confusion matrix
+conf_matrix_test_under <- confusionMatrix(test_predictions_under, employed_full_test$income_above_limit, positive = "X1")
+
+# Print the confusion matrix for the test set
+print(conf_matrix_test_under)
+
+```

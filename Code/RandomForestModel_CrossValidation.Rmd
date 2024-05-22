@@ -1,0 +1,82 @@
+---
+title: "Random Forest Model"
+output: html_notebook
+---
+
+```{r}
+if(!require(caret)) install.packages("caret")
+if(!require(randomForest)) install.packages("randomForest")
+if(!require(pROC)) install.packages("pROC")
+
+library (dplyr)
+library (randomForest)
+library (pROC)
+library (caret)
+set.seed (1234)
+```
+
+```{r}
+# Read datasets
+# Cross Validation datasets
+employed_full_cross_valid = readRDS("temp_rds_files/employed_full_cross_valid.rds")
+employed_undersample_cross_valid = readRDS("temp_rds_files/employed_undersample_cross_valid.rds")
+employed_oversample_cross_valid = readRDS("temp_rds_files/employed_oversample_cross_valid.rds")
+
+# Test datasets
+employed_full_test <- readRDS("temp_rds_files/employed_full_test.rds")
+employed_undersample_test <- readRDS("temp_rds_files/employed_undersample_test.rds")
+employed_oversample_test <- readRDS("temp_rds_files/employed_oversample_test.rds")
+
+```
+
+```{r}
+employed_full_cross_valid$income_above_limit= as.factor(employed_full_cross_valid$income_above_limit)
+
+rf_cv= rfcv(trainx=dplyr::select(employed_full_cross_valid, -income_above_limit), trainy=employed_full_cross_valid$income_above_limit,cv.fold=10)
+
+# least error is with 28 variables used so will run individual model with this to get confusion matrix 
+```
+
+``` {r}
+rf_model= randomForest(x=dplyr::select(employed_full_cross_valid, -income_above_limit), y= employed_full_cross_valid$income_above_limit, ntree=500, mtry = 28)
+rf_model$confusion
+
+prediction= predict(rf_model,employed_full_test)
+
+confusionMatrix(prediction,factor(employed_full_test$income_above_limit),positive="1")
+
+balanced_accuracy= (0.28549+0.97021)/2 # 0.628
+
+```
+
+``` {r}
+employed_undersample_cross_valid$income_above_limit= as.factor(employed_undersample_cross_valid$income_above_limit)
+
+rf_cv_undersample= rfcv(trainx=dplyr::select(employed_undersample_cross_valid, -income_above_limit), trainy=employed_undersample_cross_valid$income_above_limit,cv.fold=10)
+
+rf_model_undersample= randomForest(x=dplyr::select(employed_undersample_cross_valid, -income_above_limit), y=employed_undersample_cross_valid$income_above_limit, mtry=28)
+
+prediction_undersample= predict(rf_model_undersample,employed_full_test)
+
+confusionMatrix(prediction_undersample,factor(employed_full_test$income_above_limit),positive="1")
+
+balanced_accuracy= (0.66973+0.91272)/2 # 0.791
+
+rf_model_oversample$importance # used Excel for visualization
+
+```
+
+``` {r}
+employed_oversample_cross_valid$income_above_limit= as.factor(employed_oversample_cross_valid$income_above_limit)
+
+rf_cv_oversample= rfcv(trainx=dplyr::select(employed_oversample_cross_valid, -income_above_limit), trainy=employed_oversample_cross_valid$income_above_limit,cv.fold=10)
+
+rf_model_oversample= randomForest(x=dplyr::select(employed_oversample_cross_valid, -income_above_limit), y=employed_oversample_cross_valid$income_above_limit)
+
+prediction_oversample= predict(rf_model_oversample,employed_full_test)
+
+confusionMatrix(prediction_oversample,factor(employed_full_test$income_above_limit),positive="1")
+
+balanced_accuracy= (0.56337+0.92718)/2 # 0.745
+
+```

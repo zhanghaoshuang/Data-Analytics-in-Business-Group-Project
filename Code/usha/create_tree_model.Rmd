@@ -1,0 +1,130 @@
+---
+title: "Explore models for analyzing cleaned income data: tree"
+author: "Usha Sharma"
+date: '2024-03-10'
+output: html_document
+---
+
+```{r setup}
+# remove this when script is moved from my folder to Code
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+getwd()
+```
+    
+```{r}
+# Read data from saved dataset
+emp_train <- readRDS("temp_rds_files/employed_train.rds")
+head(emp_train, 10)
+
+unemp_train <- readRDS("temp_rds_files/unemployed_train.rds")
+head(unemp_train, 10)
+```
+```{r}
+# Remove ID (distinct for each row) and employment_status (all employed for this dataset)
+df1 = emp_train
+df1 <- df1 %>%
+  select(-c('ID', 'employment_status')) %>%
+  select(income_above_limit, everything()) %>%
+  mutate(income_above_limit = as.factor(income_above_limit))
+```
+
+```{r}
+shuffle_index <- sample(1:nrow(df1))
+head(shuffle_index)
+```
+
+```{r}
+df1 <- df1[shuffle_index, ]
+head(df1)
+```
+
+```{r}
+create_train_test <- function(data, size = 0.8, train = TRUE) {
+    n_row = nrow(data)
+    n_row
+    total_row = size * n_row
+    total_row
+    train_sample < - 1: total_row
+    train_sample
+    if (train == TRUE) {
+        return (data[train_sample, ])
+    } else {
+        return (data[-train_sample, ])
+    }
+}
+
+data_train <- create_train_test(df1, 0.8, train = TRUE)
+data_test <- create_train_test(df1, 0.8, train = FALSE)
+dim(data_train)
+dim(data_test)
+```
+
+```{r}
+# Installing package 
+install.packages("caTools")       # For sampling the dataset 
+install.packages("randomForest")  # For implementing random forest algorithm 
+  
+# Loading package 
+library(caTools) 
+library(randomForest) 
+```
+
+```{r}
+# Splitting data in train and test data 
+split <- sample.split(df1, SplitRatio = 0.8) 
+split 
+  
+data_train <- subset(df1, split == "TRUE") 
+data_test <- subset(df1, split == "FALSE") 
+dim(data_train)
+dim(data_test)
+```
+
+```{r}
+prop.table(table(data_train$income_above_limit))
+prop.table(table(data_test$income_above_limit))
+```
+
+```{r}
+install.packages('rpart')
+install.packages("rpart.plot")
+
+library(rpart)
+library(rpart.plot)
+fit <- rpart(income_above_limit~., data = data_train, method = 'class')
+rpart.plot(fit, extra = 106)
+```
+
+```{r}
+predict_unseen <-predict(fit, data_test, type = 'class')
+```
+
+```{r}
+table_mat <- table(data_test$income_above_limit, predict_unseen)
+table_mat
+```
+
+```{r}
+accuracy_test <- sum(diag(table_mat)) / sum(table_mat)
+accuracy_test
+```
+
+```{r}
+accuracy_tune <- function(fit) {
+    predict_unseen <- predict(fit, data_test, type = 'class')
+    table_mat <- table(data_test$income_above_limit, predict_unseen)
+    accuracy_test <- sum(diag(table_mat)) / sum(table_mat)
+    accuracy_test
+}
+```
+
+```{r}
+control <- rpart.control(minsplit = 4,
+    minbucket = round(5 / 3),
+    maxdepth = 3,
+    cp = 0)
+tune_fit <- rpart(income_above_limit~., data = data_train, method = 'class', control = control)
+accuracy_tune(tune_fit)
+```
+
+

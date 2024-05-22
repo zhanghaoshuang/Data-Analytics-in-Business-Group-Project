@@ -1,0 +1,127 @@
+---
+title: "Explore models for analyzing cleaned income data: logistic regression"
+author: "Usha Sharma"
+date: '2024-03-06'
+output: html_document
+---
+
+```{r setup}
+# remove this when script is moved from my folder to Code
+knitr::opts_knit$set(root.dir = normalizePath(".."))
+getwd()
+```
+
+# load required libraries
+```{r}
+library(tidyverse)
+
+```
+    
+```{r}
+# Read data from saved dataset
+emp_train <- readRDS("temp_rds_files/employed_train.rds")
+head(emp_train, 10)
+
+unemp_train <- readRDS("temp_rds_files/unemployed_train.rds")
+head(unemp_train, 10)
+```
+```{r}
+# Remove ID (distinct for each row) and employment_status (all employed for this dataset)
+df4 = emp_train
+df4 <- df4 %>%
+  select(-c('ID', 'employment_status')) %>%
+  select(income_above_limit, everything()) %>%
+  mutate(income_above_limit = as.factor(income_above_limit))
+```
+
+```{r}
+# plot the data to see the distribution
+model.df4 <- glm(income_above_limit ~ ., family = 'binomial', data = df4)
+```
+
+```{r}
+summary(model.df4)
+```
+
+# several variables are found to be insignificant
+
+
+```{r}
+# make predictions using model.df4
+
+df4 <- df4 %>% 
+  mutate(pred_prob_model4 = predict(model.df4, newdata = ., type = "response")) %>% 
+  mutate(pred_outcome_model4 = ifelse(pred_prob_model4 >= 0.5,1,0))
+# we are using 0.5 as cutoff for predicting Y=1. 
+View(df4)
+
+```
+
+```{r}
+## two-way Cross Tab table of Actual outcome and predicted Outcome 
+xtabs(~income_above_limit + pred_outcome_model4, data = df4)
+```
+
+```{r}
+#ROC Curve
+pred <- prediction(df4$pred_prob_model4, df4$income_above_limit) # create a prediction object in R
+class(pred)
+
+perf <- performance(pred, "tpr", "fpr") # tpr and fpr are true and false positive rates
+plot(perf, colorize=T)
+
+# calculate Area Under the Curve for this Logit Model
+auc.perf <-  performance(pred, measure = "auc")
+auc.perf@y.values
+```
+```{r}
+# Remove ID and employment_status as these are strings
+# change data type of response
+# remove other insignificant variables
+# born_in_us, marital_status
+
+df5 = emp_train
+df5 <- df5 %>%
+  select(-c('ID', 'employment_status', 'born_in_us')) %>%
+  select(income_above_limit, everything()) %>%
+  mutate(income_above_limit = as.factor(income_above_limit))
+```
+
+```{r}
+# plot the data to see the distribution
+model.df5 <- glm(income_above_limit ~ ., family = 'binomial', data = df5)
+```
+
+```{r}
+summary(model.df5)
+```
+```{r}
+# make predictions using model.df4
+
+df5 <- df5 %>% 
+  mutate(pred_prob_model5 = predict(model.df5, newdata = ., type = "response")) %>% 
+  mutate(pred_outcome_model5 = ifelse(pred_prob_model5 >= 0.5,1,0))
+# we are using 0.5 as cutoff for predicting Y=1. 
+View(df5)
+
+```
+
+```{r}
+## two-way Cross Tab table of Actual outcome and predicted Outcome 
+xtabs(~income_above_limit + pred_outcome_model5, data = df5)
+```
+
+```{r}
+#ROC Curve
+pred5 <- prediction(df5$pred_prob_model5, df5$income_above_limit) # create a prediction object in R
+class(pred5)
+
+perf5 <- performance(pred5, "tpr", "fpr") # tpr and fpr are true and false positive rates
+plot(perf5, colorize=T)
+
+# calculate Area Under the Curve for this Logit Model
+auc.perf5 <-  performance(pred5, measure = "auc")
+auc.perf5@y.values
+```
+
+# AUC is the similar for both models

@@ -1,0 +1,170 @@
+---
+title: "Boosting Model"
+author: "Brandon Ritchie"
+date: '2024-04-13'
+output: html_document
+---
+
+```{r}
+library(gbm)
+library(caret)
+library(xgboost)
+library(ROCR)
+library(tidyverse)
+set.seed(1234)
+```
+
+
+```{r}
+employed_full_cv <- readRDS("temp_rds_files/employed_full_cross_valid.rds")
+employed_undersample_cv <- readRDS("temp_rds_files/employed_undersample_cross_valid.rds")
+employed_oversample_cv <- readRDS("temp_rds_files/employed_oversample_cross_valid.rds")
+
+# Test datasets
+employed_full_test <- readRDS("temp_rds_files/employed_full_test.rds")
+employed_undersample_test <- readRDS("temp_rds_files/employed_undersample_test.rds")
+employed_oversample_test <- readRDS("temp_rds_files/employed_oversample_test.rds")
+```
+
+```{r}
+X_train <- employed_full_cv %>% select(-c(income_above_limit, employment_status)) %>% as.matrix()
+y <- employed_full_cv$income_above_limit
+dtrain <- xgb.DMatrix(data = as.matrix(X_train), label = y)
+# 
+# 
+# param_grid <- expand.grid(
+#   nrounds = c(50, 100), 
+#   max_depth = c(3, 6), 
+#   eta = c(0.01, 0.1), 
+#   gamma = c(0, 1), 
+#   colsample_bytree = c(0.5, 0.8), 
+#   subsample = c(0.5, 0.8), 
+#   min_child_weight = c(1, 5) 
+# )
+# 
+# # Define control parameters for cross-validation
+# ctrl <- trainControl(
+#   method = "cv", 
+#   number = 3, 
+#   classProbs = TRUE, # Ensure probability estimates are provided
+#   summaryFunction = twoClassSummary, # Use AUC for binary classification
+#   verboseIter = TRUE 
+# )
+# 
+# # Perform hyperparameter tuning
+# xgb_tune <- train(
+#   x = X_train,
+#   y = y,
+#   trControl = ctrl,
+#   method = "xgbTree",
+#   tuneGrid = param_grid
+# )
+# 
+# # Print best parameters
+# print(xgb_tune)
+
+# Train final model with best parameters
+best_params <- list(
+  nrounds = 100,
+  max_depth = 6,
+  eta = 0.1,
+  gamma = 1,
+  colsample_bytree = 0.8,
+  min_child_weight = 5,
+  subsample = 0.8
+)
+xgb_model_final <- xgboost(label = y, data = dtrain, nrounds = best_params$nrounds, objective = "binary:logistic")
+
+# Make predictions
+predictions <- predict(xgb_model_final, as.matrix(X_train))
+
+
+predictions_test <- predict(xgb_model_final, as.matrix(employed_full_test%>% select(-c(income_above_limit, employment_status))))
+true_labels <- employed_full_test$income_above_limit
+
+# Calculate AUC
+auc_obj <- prediction(predictions_test, true_labels)
+auc <- performance(auc_obj, "auc")@y.values[[1]]
+cat("AUC:", auc, "\n")
+
+predictions_factor <- ifelse(predictions_test > 0.5, 1, 0)
+
+# Calculate confusion matrix
+conf_matrix <- confusionMatrix(as.factor(predictions_factor), as.factor(true_labels))
+
+conf_matrix
+```
+
+
+```{r}
+## UNDERSAMPLING
+X_train <- employed_undersample_cv %>% select(-c(income_above_limit, employment_status)) %>% as.matrix()
+y <- employed_undersample_cv$income_above_limit
+dtrain <- xgb.DMatrix(data = as.matrix(X_train), label = y)
+
+best_params <- list(
+  nrounds = 100,
+  max_depth = 6,
+  eta = 0.1,
+  gamma = 1,
+  colsample_bytree = 0.8,
+  min_child_weight = 5,
+  subsample = 0.8
+)
+xgb_model_final <- xgboost(label = y, data = dtrain, nrounds = best_params$nrounds, objective = "binary:logistic")
+
+# Make predictions
+predictions <- predict(xgb_model_final, as.matrix(X_train))
+
+
+predictions_test <- predict(xgb_model_final, as.matrix(employed_full_test %>% select(-c(income_above_limit, employment_status))))
+true_labels <- employed_full_test$income_above_limit
+
+# Calculate AUC
+auc_obj <- prediction(predictions_test, true_labels)
+auc <- performance(auc_obj, "auc")@y.values[[1]]
+cat("AUC:", auc, "\n")
+
+predictions_factor <- ifelse(predictions_test > 0.5, 1, 0)
+
+# Calculate confusion matrix
+conf_matrix <- confusionMatrix(as.factor(predictions_factor), as.factor(true_labels))
+conf_matrix
+```
+
+
+```{r}
+## OVERSAMPLING
+X_train <- employed_oversample_cv %>% select(-c(income_above_limit, employment_status)) %>% as.matrix()
+y <- employed_oversample_cv$income_above_limit
+dtrain <- xgb.DMatrix(data = as.matrix(X_train), label = y)
+
+best_params <- list(
+  nrounds = 100,
+  max_depth = 6,
+  eta = 0.1,
+  gamma = 1,
+  colsample_bytree = 0.8,
+  min_child_weight = 5,
+  subsample = 0.8
+)
+xgb_model_final <- xgboost(params = best_params, data = dtrain, nrounds = best_params$nrounds, objective = "binary:logistic")
+
+# Make predictions
+predictions <- predict(xgb_model_final, as.matrix(X_train))
+
+
+predictions_test <- predict(xgb_model_final, as.matrix(employed_full_test %>% select(-c(income_above_limit, employment_status))))
+true_labels <- employed_full_test$income_above_limit
+
+# Calculate AUC
+auc_obj <- prediction(predictions_test, true_labels)
+auc <- performance(auc_obj, "auc")@y.values[[1]]
+cat("AUC:", auc, "\n")
+
+predictions_factor <- ifelse(predictions_test > 0.5, 1, 0)
+
+# Calculate confusion matrix
+conf_matrix <- confusionMatrix(as.factor(predictions_factor), as.factor(true_labels))
+conf_matrix
+```
